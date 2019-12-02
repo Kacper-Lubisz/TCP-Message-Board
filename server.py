@@ -8,6 +8,7 @@ import socket
 import os
 import json
 import datetime
+import selectors
 
 
 def parse_ip_port(ip: str, port: str) -> (str, int):
@@ -101,6 +102,7 @@ class Server:
         self.load_boards()
 
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.selector = selectors.DefaultSelector()
 
         self.log_file = log_file
 
@@ -119,39 +121,63 @@ class Server:
         except socket.error:
             raise ServerException(f"Port {port} is busy")
 
+        self.server_socket.setblocking(False)
         self.server_socket.listen(connection_queue)
+
         print(f"Listening at {ip} on port {port}")
+        self.write_to_log(f"Starting Server \t{datetime.datetime.now().isoformat()} {ip}:{port}", False)
+
+        self.selector.register(self.server_socket, selectors.EVENT_READ, (self.accept_connection, {}))
+
+        # while True:
+        #
+        #     client_socket, address = self.server_socket.accept()
+        #
+        #     request_time = datetime.datetime.now()
+        #
+        #     try:
+        #         request_size = int.from_bytes(self.read_bytes(client_socket, 4), "big")
+        #         request_body = self.read_bytes(client_socket, request_size)
+        #
+        #         request_body = json.loads(request_body.decode())  # throws a json.JSONDecodeError
+        #         method, status, response = self.process_request(request_time, request_body)
+        #
+        #         request_method = request_body["method"]
+        #
+        #     except (socket.timeout, json.JSONDecodeError):
+        #         request_method, status, response = "?", "ERROR", None
+        #
+        #     self.write_to_log(
+        #         f"{address[0]}:{address[1]}\t{request_time.isoformat()}\t{request_method}\t{status}\n",
+        #         True
+        #     )
+        #
+        #     if response is not None:
+        #         response = json.dumps(response).encode()
+        #
+        #         client_socket.send(len(response).to_bytes(4, "big"))
+        #         client_socket.send(response)
+        #
+        #     client_socket.close()
 
         while True:
+            for key, mask in self.selector.select(timeout=.25):
+                print(key, mask)
 
-            client_socket, address = self.server_socket.accept()
-            # client_socket.setblocking(False)
-            request_time = datetime.datetime.now()
+    def accept_connection(self, client_socket, mask):
 
-            try:
-                request_size = int.from_bytes(self.read_bytes(client_socket, 4), "big")
-                request_body = self.read_bytes(client_socket, request_size)
+        class ClientConnection():
+            pass
 
-                request_body = json.loads(request_body.decode())  # throws a json.JSONDecodeError
-                method, status, response = self.process_request(request_time, request_body)
+        client_socket, address = self.server_socket.accept()
+        request_time = datetime.datetime.now()
 
-                request_method = request_body["method"]
+        self.selector.register(client_socket, selectors.EVENT_READ, (self.read, ClientConnection()))
 
-            except (socket.timeout, json.JSONDecodeError):
-                request_method, status, response = "?", "ERROR", None
+        pass
 
-            self.write_to_log(
-                f"{address[0]}:{address[1]}\t{request_time.isoformat()}\t{request_method}\t{status}\n",
-                True
-            )
-
-            if response is not None:
-                response = json.dumps(response).encode()
-
-                client_socket.send(len(response).to_bytes(4, "big"))
-                client_socket.send(response)
-
-            client_socket.close()
+    def read(self, client_socket, mask):
+        pass
 
     @staticmethod
     def read_bytes(client_socket: socket.socket, number_of_bytes: int, buffer_size: int = 1024, timeout: float = 5):
