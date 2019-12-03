@@ -5,15 +5,15 @@ The protocol uses a 5 second timeout, if no response is received within the time
 
 The timeline of the communications is as follows:
 
-    1   c -> s, length of request (8 bytes, big endian)
-    2   c -> s, utf-8 encoded json query object [the body of the request]
+    1       c -> s, length of request (8 bytes, big endian)
+    2       c -> s, utf-8 encoded json query object [the body of the request]
     
-        loop until 2 is complete starting after delay period (less than timeout)
-        s -> c, 8 zero bytes
-        s -> c, length or recieved buffer (8 zero bytes, big endian)
+                loop until 2 is complete starting after delay period (less than timeout)
+    2.1         s -> c, 8 zero bytes
+    2.2         s -> c, length or recieved buffer (8 zero bytes, big endian)
                  
-    3   s -> c, length of response (8 bytes, big endian)
-    4   s -> c, utf-8 encoded json response object [the body of the response]
+    3       s -> c, length of response (8 bytes, big endian)
+    4       s -> c, utf-8 encoded json response object [the body of the response]
     
 Key:
 

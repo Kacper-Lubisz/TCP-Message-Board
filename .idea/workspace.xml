@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="6526369d-da22-462d-a2cb-46d9032d3dc5" name="Default Changelist" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/inspectionProfiles/Project_Default.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/Project_Default.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/server.py" beforeDir="false" afterPath="$PROJECT_DIR$/server.py" afterDir="false" />
     </list>
@@ -31,11 +31,10 @@
       <file pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/server.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="219">
-              <caret line="463" column="52" selection-start-line="463" selection-start-column="52" selection-end-line="463" selection-end-column="52" />
+            <state relative-caret-position="522">
+              <caret line="589" column="26" selection-start-line="589" selection-start-column="26" selection-end-line="589" selection-end-column="26" />
               <folding>
                 <element signature="e#164#198#0" expanded="true" />
-                <element signature="e#487#2579#0" />
               </folding>
             </state>
           </provider>
@@ -269,7 +268,7 @@
     <servers />
   </component>
   <component name="TimeTrackingManager">
-    <option name="totallyTimeSpent" value="69614000" />
+    <option name="totallyTimeSpent" value="69966000" />
   </component>
   <component name="ToolWindowManager">
     <frame x="-8" y="-8" width="1936" height="1066" extended-state="6" />
@@ -286,7 +285,7 @@
       <window_info anchor="bottom" id="Inspection" order="5" weight="0.4" />
       <window_info anchor="bottom" id="TODO" order="6" />
       <window_info anchor="bottom" id="Docker" order="7" show_stripe_button="false" />
-      <window_info anchor="bottom" id="Version Control" order="8" />
+      <window_info anchor="bottom" id="Version Control" order="8" weight="0.3298647" />
       <window_info anchor="bottom" id="Database Changes" order="9" />
       <window_info anchor="bottom" id="Event Log" order="10" sideWeight="0.5015625" side_tool="true" weight="0.5340794" />
       <window_info anchor="bottom" id="Terminal" order="11" visible="true" weight="0.29032257" />
@@ -507,16 +506,16 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/server.log">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="425">
-          <caret line="25" column="38" selection-start-line="25" selection-start-column="38" selection-end-line="25" selection-end-column="38" />
+        <state relative-caret-position="-111">
+          <caret line="23" column="19" lean-forward="true" selection-start-line="23" selection-start-column="19" selection-end-line="23" selection-end-column="19" />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/README.md">
       <provider selected="true" editor-type-id="split-provider[text-editor;markdown-preview-editor]">
         <state split_layout="SPLIT">
-          <first_editor relative-caret-position="-476">
-            <caret line="23" column="13" lean-forward="true" selection-start-line="23" selection-start-column="13" selection-end-line="23" selection-end-column="13" />
+          <first_editor relative-caret-position="17">
+            <caret line="11" column="16" selection-start-line="11" selection-start-column="16" selection-end-line="11" selection-end-column="16" />
           </first_editor>
           <second_editor />
         </state>
@@ -524,7 +523,7 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/client.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="403">
+        <state relative-caret-position="4488">
           <caret line="264" column="8" lean-forward="true" selection-start-line="264" selection-start-column="8" selection-end-line="264" selection-end-column="8" />
           <folding>
             <element signature="e#178#212#0" expanded="true" />
@@ -534,11 +533,10 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/server.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="219">
-          <caret line="463" column="52" selection-start-line="463" selection-start-column="52" selection-end-line="463" selection-end-column="52" />
+        <state relative-caret-position="522">
+          <caret line="589" column="26" selection-start-line="589" selection-start-column="26" selection-end-line="589" selection-end-column="26" />
           <folding>
             <element signature="e#164#198#0" expanded="true" />
-            <element signature="e#487#2579#0" />
           </folding>
         </state>
       </provider>

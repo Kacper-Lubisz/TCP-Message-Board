@@ -1,7 +1,7 @@
 #!/usr/bin/python3.8
 """
 This is the server for the Networking Anonymous Board program.  It starts a TCP server which follows the protocol
-defined in README.md
+defined in README.md.
 """
 from __future__ import annotations
 
@@ -588,5 +588,4 @@ if __name__ == '__main__':
     try:
         main()
     except Exception as e:
-        raise e
-        # print("The program failed unexpectedly with message:\n" + str(e))
+        print("The program failed unexpectedly with message:\n" + str(e))
