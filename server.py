@@ -23,15 +23,15 @@ def parse_args_port(
         connection_queue: str
 ) -> (str, int, str, str, int):
     """
-    This function is for validating ip and port.  Each input as strings.  If the IP address and port are invalid
-    then an exception will be raised, otherwise a parsed version will be returned.
+    This function is for validating command line arguments.  Each input as strings.  If any parameter is invalid a
+    Server error is raised.
     :param ip: The string ipv4 address
     :param port: The string or int of the port number
     :param connection_queue: the string socket connection queue length
     :param log_path: the path to the log file
     :param boards_dir: the path to the directory holding the boards
-    :return: (ip, port), The parsed ip and port
-    :raises: Exception if ip or port are invalid
+    :return: (ip, port, board_dir, log_path, connection_queue), The parsed arguments
+    :raises: Exception if any argument is erroneous
     """
 
     try:
@@ -86,8 +86,10 @@ class ServerException(Exception):
 
 class Server:
     """
-    This class manages the behaviour of the server.
-    The protocol that the server operates can be found in README.md
+    This class manages the behaviour of the server.  The server object handles requests by creating a thread for each
+    connection.  Each of those threads accesses a BufferedReader which allows the protocol to be written in serial
+    blocking code.  The server updates all buffered readers when data is available to be read from the socket. The
+    protocol that the server operates can be found in README.md
     """
 
     timeout: float = 5.0
@@ -108,6 +110,15 @@ class Server:
             connection_queue: int,
             notify_period: float
     ):
+        """
+        Instantiates a server object
+        :param verbose: if the server should print its log to the console
+        :param buffer_size: the read buffer size
+        :param boards_dir: the path to the boards directory
+        :param log_file: the path to the log file
+        :param connection_queue: the number of simultaneous unaccepted connections that can queue
+        :param notify_period: the period the reader will wait before it begins to acknowledge received data
+        """
 
         self.notify_period = notify_period
 
@@ -126,7 +137,7 @@ class Server:
 
         self.log_file = log_file
 
-    def __del__(self):
+    def __del__(self) -> None:
         self.server_socket.close()
         for key in self.selector.get_map():
             print(">", key)
@@ -163,10 +174,14 @@ class Server:
                 callback, data = key.data
                 callback(*data)
 
-    def accept_connection(self):
-
+    def accept_connection(self) -> None:
+        """
+        This method is a callback which processes a new connection being created.  This method is called by the Server
+        selector when a new connection is available.  This creates a new ClientConnection object (thread) and registers
+        its socket with the selector
+        """
         client_socket, address = self.server_socket.accept()
-        client = ClientConnection(self, client_socket, address)
+        client = ClientConnection(self, client_socket)
 
         self.selector.register(
             client_socket,
@@ -176,7 +191,11 @@ class Server:
 
         client.start()
 
-    def unregister(self, client: ClientConnection):
+    def unregister(self, client: ClientConnection) -> None:
+        """
+        This method destroys a ClientConnection object and unregisters it from the selector
+        :param client:
+        """
         self.selector.unregister(client.socket)
         client.socket.close()
 
@@ -186,7 +205,7 @@ class Server:
         :param request_time: The time at which the request was received
         :param request_body: The query information
         :raises Server.RequestException:  If the request is malformed
-        :return: The a touple representing the request method (? if invalid), the status message and dictionary response
+        :return: The a tuple representing the request method (? if invalid), the status message and, dictionary response
          to the request
         """
 
@@ -287,7 +306,7 @@ class Server:
         """
 
         messages = []
-        message_files = list(sorted(os.listdir(self.boards_dir + "/" + board_dir), reverse=False))[:100]
+        message_files = list(sorted(os.listdir(self.boards_dir + "/" + board_dir), reverse=True))[:100]
 
         for message_file in message_files:
             message_name_components = message_file.split("-")
@@ -366,8 +385,21 @@ class Server:
 
 
 class BufferedReader:
-    def __init__(self, socket: socket.socket, notify_period: float, read_size: int):
-        self.socket = socket
+    """
+    This class is used for reading from the client socket.  The class maintains its own buffer which is updated when
+    data is available and update is called.  This class is used for controlling blocking in reading arbitrary lengths of
+    byte array.  It isn't part of ClientConnection so that ClientConnection can implement the protocol as blocking code
+    in serial.  The buffered reader also manages sending received acknowledgments to the server.
+    """
+
+    def __init__(self, buffer_socket: socket.socket, notify_period: float, read_size: int):
+        """
+        Instantiates a buffed reader
+        :param buffer_socket: The socket which should be buffered
+        :param notify_period: the period the reader will wait until it sends received acknowledgments.
+        :param read_size: The size of the buffer which is read from the socket in one call to update
+        """
+        self.socket = buffer_socket
         self.buffer = bytes()
         self.read_size = read_size
         self.notify_period = notify_period
@@ -380,6 +412,10 @@ class BufferedReader:
         self.last_notified = None
 
     def read_bytes(self, n):
+        """
+        This is a blocking method which returns the specified number of bytes from the socket.
+        :raises socket.timeout: if the socket times out before the specified number of bytes is read
+        """
         with self.lock:
             self.lock_until = n
             if self.lock_until > len(self.buffer):
@@ -394,7 +430,13 @@ class BufferedReader:
 
         return data
 
-    def update(self):
+    def update(self) -> None:
+        """
+        This method triggers the buffered reader to read from the socket.  When this is called the buffered reader reads
+        its `read_size` more into the buffer.  `read_size` ought to be optimised to maximise speed and fairness between
+        concurrent clients.  If adding these bytes to the buffer means that a blocked read_bytes can be unblocked then
+        it will be.
+        """
 
         with self.lock:
             read = self.socket.recv(self.read_size)
@@ -405,7 +447,7 @@ class BufferedReader:
                 if now - self.last_notified > self.notify_period:
                     self.last_notified = now
 
-                    self.socket.send(b'\x00\x00\x00\x00\x00\x00\x00\x00')
+                    self.socket.send(b'\x00\x00\x00\x00\x00\x00\x00\x00')  # acknowledgment
                     self.socket.send((len(self.buffer)).to_bytes(8, "big"))
 
                 if self.lock_until <= len(self.buffer):
@@ -413,19 +455,34 @@ class BufferedReader:
 
 
 class ClientConnection(threading.Thread):
-    def __init__(self, server: Server, socket: socket.socket, address):
-        super().__init__(name=str(address))
+    """
+    This class is responsible for implementing the communications part of the protocol specified in README.md.  The
+    client connection object is a thread which implements the protocol.  This class uses the blocking buffered reader
+    which allows for the protocol to be implemented in series in the run method.
+    """
+
+    def __init__(self, server: Server, client_socket: socket.socket):
+        """
+        Instantiates a new ClientConnection
+        :param server: The parent server of the connection
+        :param client_socket: The socket of the client that is to be read
+        """
+        super().__init__(name=str(client_socket.getsockname()))
 
         self.timestamp = datetime.datetime.now()
 
         self.server = server
-        self.address = address
-        self.socket = socket
+        self.address = client_socket.getsockname()
+        self.socket = client_socket
 
         self.requestSize = None
-        self.reader = BufferedReader(socket, server.notify_period, server.buffer_size)
+        self.reader = BufferedReader(client_socket, server.notify_period, server.buffer_size)
 
     def run(self):
+        """
+        The thread body which performs the protocol
+        :return:
+        """
 
         try:
             request_size = int.from_bytes(self.reader.read_bytes(8), "big")
