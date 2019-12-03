@@ -22,16 +22,24 @@ class ClientException(Exception):
 # this is code that is shared between the client and server. I wasn't certain if it would be a good idea to have a
 # separate file with common code in case it messes with any automated marking. I'd suspect it wouldn't.
 
-def read_bytes(client_socket: socket.socket, number_of_bytes: int, buffer_size: int = 1024, timeout: float = 5):
+def read_bytes(
+        client_socket: socket.socket,
+        n: int,
+        buffer_size: int = 1024 * 16,
+        timeout: float = 5,
+        notify_period: float = .1
+):
     """
     This method reads a particular number of bytes from the socket. If this number of bytes can't be read in the
     specified timeout a socket.timeout exception will be raised.  If the specified buffer size is more than the
     number of bytes to read, then the buffer size will be reduced to that amount.
 
     :param client_socket: The socket to read form
-    :param number_of_bytes: The number of bytes to be read
+    :param n: The number of bytes to be read
     :param timeout: The time in seconds that the should be waited for
     :param buffer_size: The buffer size used to read from the socket
+    :param notify_period: The amount of time that the function will wait to receive the transition before it starts
+        printing progress reports
     :return:
     """
     received = bytes()
@@ -40,9 +48,21 @@ def read_bytes(client_socket: socket.socket, number_of_bytes: int, buffer_size: 
     previous_timeout = client_socket.gettimeout()
     client_socket.settimeout(timeout)
 
-    while len(received) != number_of_bytes and buffer is not None:
-        buffer = client_socket.recv(min(buffer_size, number_of_bytes))
+    last_notified = datetime.datetime.now().timestamp()
+
+    printed_progress = False
+    while len(received) != n and buffer is not None:
+        buffer = client_socket.recv(min(buffer_size, n))
         received += buffer
+
+        now = datetime.datetime.now().timestamp()
+        if now - last_notified > notify_period:
+            last_notified = now
+            print(f"Receiving transmission {str(len(received)).rjust(len(str(n)))}/{n} bytes ")
+            printed_progress = True
+
+    if printed_progress:
+        print("Transmission Complete")
 
     client_socket.settimeout(previous_timeout)
 
@@ -67,7 +87,8 @@ def main():
 
     # load boards
     response = make_request(address, {
-        "method": "GET_BOARDS"
+        "method": "GET_BOARDS",
+        "version": "1.0.0"
     })
 
     if not response["success"]:
@@ -108,6 +129,7 @@ def main():
 
             response = make_request(address, {
                 "method": "POST_MESSAGE",
+                "version": "1.0.0",
                 "board": boards[board_selected - 1],
                 "title": message_title,
                 "content": message_content
@@ -132,6 +154,7 @@ def main():
 
             board_messages = make_request(address, {
                 "method": "GET_MESSAGES",
+                "version": "1.0.0",
                 "board": boards[selection - 1]
             })
 
@@ -142,9 +165,10 @@ def main():
             plural = '' if messages_number == 1 else 's'
             print(f"Successfully retrieved {messages_number} message{plural} in board '{boards[selection - 1]}'")
 
-            for message in board_messages["messages"]:
-                date = datetime.datetime.strptime(message["date"] + message["time"], "%Y%m%d%H%M%S")
-                print(f"\n{message['title']}\n{date.isoformat()}\n{message['contents']}\n")
+            message_count = len(board_messages["messages"])
+            for index, message in enumerate(board_messages["messages"]):
+                date = datetime.datetime.strptime(message["date"] + message["time"], "%Y%m%d%H%M%S").isoformat()
+                print(f"Message {index + 1}/{message_count}\n{message['title']}\n{date}\n{message['contents']}\n")
 
                 selection = input("ENTER for next message, or type 'END' to skip to the end\n>").upper()
                 if selection == "END":
@@ -201,16 +225,29 @@ def make_request(address: (str, int), request_info: dict) -> dict:
     :param request_info:
     :return:
     """
+
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.connect(address)
 
         request = json.dumps(request_info).encode()
+        request_length = len(request)
 
-        s.send(len(request).to_bytes(4, "big"))
+        s.send(request_length.to_bytes(8, "big"))
         s.send(request)
 
-        response_size = int.from_bytes(read_bytes(s, 4), "big")
+        response_size = int.from_bytes(read_bytes(s, 8), "big")
+
+        printed_progress = False
+        while response_size == 0:  # acknowledgment
+            bytes_read = int.from_bytes(read_bytes(s, 8), "big")
+            print(f"Transmitting request, {str(bytes_read).rjust(len(str(request_length)))}/{request_length} bytes ")
+            printed_progress = True
+            response_size = int.from_bytes(read_bytes(s, 8), "big")
+
+        if printed_progress:
+            print("Transmission Complete")
+
         response = read_bytes(s, response_size).decode()
 
         s.close()

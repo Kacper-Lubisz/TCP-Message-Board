@@ -1,14 +1,60 @@
-127.0.0.1:57403	20191201-210745	GET_BOARDS	OK
-127.0.0.1:57403	20191201-210745	127.0.0.1:57403	20191201-210813	GET_BOARDS	OK
-127.0.0.1:57403	20191201-210813	127.0.0.1:57408	20191201-210829	GET_BOARDS	OK
-127.0.0.1:57408	20191201-210829	127.0.0.1:57408	20191201-210840	GET_BOARDS	OK
-127.0.0.1:57408	20191201-210840	127.0.0.1:57416	20191201-210906	GET_BOARDS	OK
-127.0.0.1:57416	20191201-210906	127.0.0.1:57416	20191201-210913	GET_BOARDS	OK
-Starting Server 	2019-12-03T00:37:27.670193 localhost:2000Starting Server 	2019-12-03T00:43:05.067517	localhost:2000Starting Server 	2019-12-03T00:46:21.031978	localhost:2000Starting Server 	2019-12-03T00:47:30.774161	localhost:2000Starting Server 	2019-12-03T00:48:41.178527 localhost:2000Starting Server 	2019-12-03T00:48:52.151675 localhost:2000Starting Server 	2019-12-03T00:48:54.707430 localhost:2000Starting Server 	2019-12-03T00:49:06.941602 localhost:2000
-Starting Server 	2019-12-03T00:52:48.730330 localhost:2000
-Starting Server 	2019-12-03T00:54:14.481899 localhost:2000
-Starting Server 	2019-12-03T00:54:57.481721 localhost:2000
-Starting Server 	2019-12-03T00:55:26.131908 localhost:2000
-Starting Server 	2019-12-03T01:00:09.804143 localhost:2000
-Starting Server 	2019-12-03T01:01:22.044484 localhost:2000
-Starting Server 	2019-12-03T01:39:02.327291 localhost:2000
+2019-12-03T22:35:51.674211       localhost:2000  Starting Server
+2019-12-03T22:35:55.288688       127.0.0.1:65400 GET_BOARDS   OK
+2019-12-03T22:35:57.712313       127.0.0.1:65401 GET_MESSAGES OK
+2019-12-03T22:35:58.209508       127.0.0.1:65402 GET_MESSAGES OK
+2019-12-03T22:35:59.127606       127.0.0.1:65403 GET_MESSAGES OK
+2019-12-03T22:35:59.412368       127.0.0.1:65404 GET_MESSAGES OK
+2019-12-03T22:35:59.728522       127.0.0.1:65405 GET_MESSAGES OK
+2019-12-03T22:35:59.993830       127.0.0.1:65406 GET_MESSAGES OK
+2019-12-03T22:36:21.002273       127.0.0.1:65407 POST_MESSAGE OK
+2019-12-03T22:36:40.736298       127.0.0.1:65409 POST_MESSAGE OK
+2019-12-03T22:37:02.322398       127.0.0.1:65410 POST_MESSAGE OK
+2019-12-03T22:37:30.390951       127.0.0.1:50574 POST_MESSAGE OK
+2019-12-03T22:38:34.351082       127.0.0.1:50576 GET_BOARDS   OK
+2019-12-03T22:38:34.357066       127.0.0.1:50577 POST_MESSAGE OK
+2019-12-03T22:38:45.383494       127.0.0.1:50578 GET_BOARDS   OK
+2019-12-03T22:38:45.388480       127.0.0.1:50579 POST_MESSAGE OK
+2019-12-03T22:38:51.991997       127.0.0.1:50580 GET_BOARDS   OK
+2019-12-03T22:38:53.254715       127.0.0.1:50581 GET_MESSAGES OK
+2019-12-03T22:38:51.991997    192.168.8.12:100   GET_BOARDS   OK
+2019-12-03T22:35:41.575310                       Server Stopped	Exception Occurred
+	Traceback (most recent call last):
+	  File "server.py", line 511, in main
+	    raise ServerException()
+	ServerException
+2019-12-03T22:35:47.804339                       Server Stopped	Exception Occurred
+	Traceback (most recent call last):
+	  File "server.py", line 511, in main
+	    raise ServerException()
+	ServerException
+2019-12-03T22:42:54.599033                       Server Stopped	^C Keyboard Interrupt
+2019-12-03T22:43:03.797249       localhost:2000  Starting Server
+2019-12-03T22:43:04.299439                       Server Stopped	^C Keyboard Interrupt
+2019-12-03T22:43:05.731193       localhost:2000  Starting Server
+2019-12-03T22:43:06.734587                       Server Stopped	^C Keyboard Interrupt
+2019-12-03T22:43:08.512421       localhost:2000  Starting Server
+2019-12-03T22:43:11.517992                       Server Stopped	^C Keyboard Interrupt
+2019-12-03T22:51:24.244956       localhost:2000  Starting Server
+2019-12-03T22:51:26.269185       127.0.0.1:50609 GET_BOARDS   OK
+2019-12-03T22:51:27.480022       127.0.0.1:50610 GET_MESSAGES OK
+2019-12-03T22:51:55.854880                       Server Stopped	Exception Occurred
+	Traceback (most recent call last):
+	  File "C:/Users/kacpe/Desktop/Networks Coursework/server.py", line 147, in start
+	    self.server_socket.bind(address)
+	OSError: [WinError 10048] Only one usage of each socket address (protocol/network address/port) is normally permitted
+	
+	During handling of the above exception, another exception occurred:
+	
+	Traceback (most recent call last):
+	  File "C:/Users/kacpe/Desktop/Networks Coursework/server.py", line 512, in main
+	    server.start(address)
+	  File "C:/Users/kacpe/Desktop/Networks Coursework/server.py", line 149, in start
+	    raise ServerException(f"Port {port} is busy")
+	ServerException: Port 2000 is busy
+	2019-12-03T22:52:01.966618       127.0.0.1:50611 GET_BOARDS   OK
+2019-12-03T22:52:23.968223       127.0.0.1:50612 GET_MESSAGES OK
+2019-12-03T22:52:38.783766       127.0.0.1:50613 GET_BOARDS   OK
+2019-12-03T22:52:39.519310       127.0.0.1:50614 GET_MESSAGES OK
+2019-12-03T22:52:57.557272       127.0.0.1:50615 GET_BOARDS   OK
+2019-12-03T22:52:58.412983       127.0.0.1:50616 GET_MESSAGES OK
+2019-12-03T22:56:27.639935                       Server Stopped	^C Keyboard Interrupt

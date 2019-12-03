@@ -1,13 +1,15 @@
 # Message-Board protocol
 This file describes the protocol that is used by client.py and server.py
 
-The timeline of the communications is as follows, all communications happen in series
+The protocol uses a 5 second timeout, if no response is received within the timeout the transaction is to be abandoned.
 
-    c -> s, length of request (4 bytes, big endian)
+The timeline of the communications is as follows:
+
+    c -> s, length of request (8 bytes, big endian)
     c -> s, utf-8 encoded json query object [the body of the request]
-    s -> c, length of response (4 bytes, big endian)
+    s -> c, length of response (8 bytes, big endian)
     s -> c, utf-8 encoded json response object [the body of the response]
-
+    
 Key:
 
     a -> b, a sends a message to b
@@ -19,7 +21,8 @@ Key:
 The format of a query can be defined as follows,
 
     {
-        method: "GET_BOARDS" | "GET_MESSAGES" | "POST_MESSAGE"
+        method: "GET_BOARDS" | "GET_MESSAGES" | "POST_MESSAGE", request type
+        version: string, the version of the protocol being used
         **args: depending on method
     }
 

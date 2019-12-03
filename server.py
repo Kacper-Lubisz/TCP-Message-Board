@@ -11,17 +11,29 @@ import os
 import json
 import datetime
 import selectors
+import threading
+import traceback
 
 
-def parse_ip_port(ip: str, port: str) -> (str, int):
+def parse_args_port(
+        ip: str,
+        port: str,
+        boards_dir: str,
+        log_path: str,
+        connection_queue: str
+) -> (str, int, str, str, int):
     """
     This function is for validating ip and port.  Each input as strings.  If the IP address and port are invalid
     then an exception will be raised, otherwise a parsed version will be returned.
     :param ip: The string ipv4 address
     :param port: The string or int of the port number
+    :param connection_queue: the string socket connection queue length
+    :param log_path: the path to the log file
+    :param boards_dir: the path to the directory holding the boards
     :return: (ip, port), The parsed ip and port
     :raises: Exception if ip or port are invalid
     """
+
     try:
         port = int(port)  # this cast will also succeed if the port is of type int
     except ValueError:
@@ -30,66 +42,46 @@ def parse_ip_port(ip: str, port: str) -> (str, int):
     if port < 0 or port > 65535:
         raise ServerException("Port out of range")
 
-    if ip == "localhost":
-        return ip, port
+    if ip != "localhost":
+        # tests ip pattern, the regex for this is awful
+        ip_parts = ip.split(".")
+        if len(ip_parts) != 4:
+            raise ServerException("Invalid IP")
 
-    # tests ip pattern, the regex for this is awful
-    ip_parts = ip.split(".")
-    if len(ip_parts) != 4:
-        raise ServerException("Invalid IP")
+        def test_ip_section(section):
+            """
+            Checks if each section of the ip is valid
+            :param section: The section to check
+            :return: if the section is in range
+            :raises: Exception if the ip is in the incorrect format
+            """
+            try:
+                return 0 <= int(section) <= 255
+            except ValueError:
+                raise ServerException("Invalid IP address")
 
-    def test_ip_section(section):
-        """
-        Checks if each section of the ip is valid
-        :param section: The section to check
-        :return: if the section is in range
-        :raises: Exception if the ip is in the incorrect format
-        """
-        try:
-            return 0 <= int(section) <= 255
-        except ValueError:
+        if not all(map(test_ip_section, ip_parts)):
             raise ServerException("Invalid IP address")
 
-    if not all(map(test_ip_section, ip_parts)):
-        raise ServerException("Invalid IP address")
+    # TODO the args below could do with more checks here,
+    #  it would be nicer design but not really time effective since the code already throws meaningful errors in these
+    #  cases
 
-    return ip, port
+    if boards_dir.endswith("/"):
+        boards_dir = boards_dir[:-1]
 
+    try:
+        connection_queue = int(connection_queue)
+    except ValueError:
+        raise ServerException("Invalid connection queue argument passed, it's must be an integer")
 
-def main() -> None:
-    """Main function"""
-
-    if sys.version_info[0] < 3 or sys.version_info[1] < 6:
-        print("server.py is only compatible with Python 3.6 (or above)")
-        sys.exit(1)
-
-    if any(map(lambda arg: arg in sys.argv, ["help", "-h", "--help"])):
-        print("usage: server.py [ip] [port]\noptions:\n\t-v --verbose prints server logs to console")
-        sys.exit(0)
-
-    verbose = False
-    if "-v" in sys.argv:
-        verbose = True
-        sys.argv.remove("-v")
-
-    if "--verbose" in sys.argv:
-        verbose = True
-        sys.argv.remove("--verbose")
-
-    ip = sys.argv[1] if len(sys.argv) >= 2 else input("Input IP >")
-    port = sys.argv[2] if len(sys.argv) >= 3 else input("Input Port >")
-
-    address = parse_ip_port(ip, port)
-
-    server = Server(verbose)
-    server.start(address)
+    return ip, port, boards_dir, log_path, connection_queue
 
 
 class ServerException(Exception):
     """
     This is an error type that the server raises
     """
-    pass
 
 
 class Server:
@@ -98,15 +90,29 @@ class Server:
     The protocol that the server operates can be found in README.md
     """
 
+    timeout: float = 5.0
+    boards_dir: str = "./boards"
+    log_path: str = "./server.log"
+    connection_queue: int = 10
+    buffer_size: int = 1024 * 16
+    version: str = "1.0.0"
+
+    notify_period = 0.1
+
     def __init__(
             self,
-            verbose: bool = False,
-            buffer_size: int = 1024,
-            boards_dir: str = "./boards",
-            log_file: str = "./server.log"
+            verbose: bool,
+            buffer_size: int,
+            boards_dir: str,
+            log_file: str,
+            connection_queue: int,
+            notify_period: float
     ):
 
+        self.notify_period = notify_period
+
         self.verbose = verbose
+        self.connection_queue = connection_queue
 
         self.buffer_size = buffer_size
         self.boards_dir = boards_dir
@@ -114,15 +120,22 @@ class Server:
         self.boards = []
 
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.server_socket.settimeout(Server.timeout)
+
         self.selector = selectors.DefaultSelector()
 
         self.log_file = log_file
 
-    def start(self, address: (str, int), connection_queue: int = 100) -> None:
+    def __del__(self):
+        self.server_socket.close()
+        for key in self.selector.get_map():
+            print(">", key)
+
+        self.selector.close()
+
+    def start(self, address: (str, int)) -> None:
         """
         This method starts the server, listening on the specified address
-        :param connection_queue: The number of unaccepted connections that the server should queue before refusing
-            connections
         :param address: The address the server should listen on
         """
 
@@ -136,9 +149,12 @@ class Server:
             raise ServerException(f"Port {port} is busy")
 
         self.server_socket.setblocking(False)
-        self.server_socket.listen(connection_queue)
+        self.server_socket.listen(self.connection_queue)
 
-        self.write_to_log(f"Starting Server \t{datetime.datetime.now().isoformat()} {ip}:{port}\n", self.verbose)
+        self.write_to_log(
+            f"{datetime.datetime.now().isoformat()} {ip.rjust(15)}:{str(port).ljust(5)} Starting Server\n",
+            self.verbose
+        )
 
         self.selector.register(self.server_socket, selectors.EVENT_READ, (self.accept_connection, []))
 
@@ -151,38 +167,18 @@ class Server:
 
         client_socket, address = self.server_socket.accept()
         client = ClientConnection(self, client_socket, address)
+
         self.selector.register(
             client_socket,
             selectors.EVENT_READ,
-            (client.read_bytes, [])
+            (client.reader.update, [])
         )
 
-    @staticmethod
-    def read_bytes(client_socket: socket.socket, number_of_bytes: int, buffer_size: int = 1024, timeout: float = 5):
-        """
-        This method reads a particular number of bytes from the socket. If this number of bytes can't be read in the
-        specified timeout a socket.timeout exception will be raised.  If the specified buffer size is more than the
-        number of bytes to read, then the buffer size will be reduced to that amount.
+        client.start()
 
-        :param client_socket: The socket to read form
-        :param number_of_bytes: The number of bytes to be read
-        :param timeout: The time in seconds that the should be waited for
-        :param buffer_size: The buffer size used to read from the socket
-        :return:
-        """
-        received = bytes()
-        buffer = bytes()
-
-        previous_timeout = client_socket.gettimeout()
-        client_socket.settimeout(timeout)
-
-        while len(received) != number_of_bytes and buffer is not None:
-            buffer = client_socket.recv(min(buffer_size, number_of_bytes))
-            received += buffer
-
-        client_socket.settimeout(previous_timeout)
-
-        return received
+    def unregister(self, client: ClientConnection):
+        self.selector.unregister(client.socket)
+        client.socket.close()
 
     def process_request(self, request_time: datetime, request_body: dict) -> (str, str, dict):
         """
@@ -193,6 +189,17 @@ class Server:
         :return: The a touple representing the request method (? if invalid), the status message and dictionary response
          to the request
         """
+
+        if "version" not in request_body:
+            return "?", "ERROR", {
+                "success": False,
+                "boards": "No protocol version specified"
+            }
+        elif request_body["version"] != Server.version:
+            return "?", "ERROR", {
+                "success": False,
+                "boards": f"Incompatible protocol version, server uses {Server.version}"
+            }
 
         if "method" not in request_body:
             return "?", "ERROR", {
@@ -280,7 +287,7 @@ class Server:
         """
 
         messages = []
-        message_files = list(reversed(sorted(os.listdir(self.boards_dir + "/" + board_dir))))[:100]
+        message_files = list(sorted(os.listdir(self.boards_dir + "/" + board_dir), reverse=False))[:100]
 
         for message_file in message_files:
             message_name_components = message_file.split("-")
@@ -358,30 +365,171 @@ class Server:
             print(message, end="")
 
 
-class ClientConnection():
-    def __init__(self, server: Server, socket, address):
-        super().__init__()
+class BufferedReader:
+    def __init__(self, socket: socket.socket, notify_period: float, read_size: int):
+        self.socket = socket
+        self.buffer = bytes()
+        self.read_size = read_size
+        self.notify_period = notify_period
 
-        self.time = datetime.datetime.now()
+        self.lock_until = 0
+
+        self.read_lock = threading.Lock()
+        self.lock = threading.Lock()
+
+        self.last_notified = None
+
+    def read_bytes(self, n):
+        with self.lock:
+            self.lock_until = n
+            if self.lock_until > len(self.buffer):
+                self.read_lock.acquire()
+                self.last_notified = datetime.datetime.now().timestamp()
+
+        with self.read_lock:
+            self.last_notified = None
+
+            data = self.buffer[:n]
+            self.buffer = self.buffer[n:]
+
+        return data
+
+    def update(self):
+
+        with self.lock:
+            read = self.socket.recv(self.read_size)
+            self.buffer += read
+
+            if self.read_lock.locked():
+                now = datetime.datetime.now().timestamp()
+                if now - self.last_notified > self.notify_period:
+                    self.last_notified = now
+
+                    self.socket.send(b'\x00\x00\x00\x00\x00\x00\x00\x00')
+                    self.socket.send((len(self.buffer)).to_bytes(8, "big"))
+
+                if self.lock_until <= len(self.buffer):
+                    self.read_lock.release()
+
+
+class ClientConnection(threading.Thread):
+    def __init__(self, server: Server, socket: socket.socket, address):
+        super().__init__(name=str(address))
+
+        self.timestamp = datetime.datetime.now()
 
         self.server = server
         self.address = address
         self.socket = socket
 
         self.requestSize = None
-        self.bytesRead = bytes()
+        self.reader = BufferedReader(socket, server.notify_period, server.buffer_size)
 
-    def read_bytes(self):
-        pass
+    def run(self):
+
+        try:
+            request_size = int.from_bytes(self.reader.read_bytes(8), "big")
+            request_body = self.reader.read_bytes(request_size)
+
+            request_body = json.loads(request_body.decode())  # throws a json.JSONDecodeError
+            method, status, response = self.server.process_request(self.timestamp, request_body)
+
+            request_method = request_body["method"]
+
+        except (socket.timeout, json.JSONDecodeError):
+            request_method, status, response = "?", "ERROR", None
+
+        ip, port = self.address
+
+        self.server.write_to_log(
+            f"{self.timestamp.isoformat()} {ip.rjust(15)}:{str(port).ljust(5)} {request_method.ljust(12)} {status}\n",
+            True
+        )
+
+        if response is not None:
+            response = json.dumps(response).encode()
+
+            self.socket.send(len(response).to_bytes(8, "big"))
+            self.socket.send(response)
+
+        self.server.unregister(self)
+
+
+def main() -> None:
+    """Main function"""
+
+    if sys.version_info[0] < 3 or sys.version_info[1] < 6:
+        print("server.py is only compatible with Python 3.6 (or above)")
+        sys.exit(1)
+
+    if any(map(lambda flag: flag in sys.argv, ["help", "-h", "--help"])):
+        print(
+            """usage: server.py [ip] [port]
+            options:
+            \t-l --log [./server.log] the path to the log file
+            \t-b --boards [./boards] the path to the boards directory
+            \t-q --queue [10] the number of connections that can queue to be accepted at a time
+            \t-v --verbose prints server logs to console
+            """)
+        sys.exit(0)
+
+    # this loop parses command line arguments and places them into an array
+    parsed_args = dict()
+    for arg, markers, is_flag in [
+        ("log_path", ["-l", "--log"], False),
+        ("boards_dir", ["-b", ",--boards"], False),
+        ("verbose", ["-v", ",--verbose"], True),
+        ("queue", ["-q", ",--queue"], False)
+    ]:
+        for marker in markers:
+            if marker in sys.argv:
+                index = sys.argv.index(marker)
+                sys.argv.pop(index)
+
+                if not is_flag:
+                    parsed_args[arg] = sys.argv[index]
+                    sys.argv.pop(index)
+                else:
+                    parsed_args[arg] = True
+
+    verbose = parsed_args["verbose"] if "verbose" in parsed_args else False
+    boards_dir = parsed_args["boards_dir"] if "boards_dir" in parsed_args else Server.boards_dir
+    log_path = parsed_args["log_path"] if "log_path" in parsed_args else Server.log_path
+    connection_queue = parsed_args["queue"] if "queue" in parsed_args else Server.connection_queue
+
+    ip = sys.argv[1] if len(sys.argv) >= 2 else input("Input IP >")
+    port = sys.argv[2] if len(sys.argv) >= 3 else input("Input Port >")
+
+    ip, port, boards_dir, log_path, connection_queue = parse_args_port(ip, port, boards_dir, log_path, connection_queue)
+    address = (ip, port)
+
+    # TODO this parsing could do with improving, e.g. in any case where the input args aren't perfect it errors out
+
+    server = Server(verbose, Server.buffer_size, boards_dir, log_path, connection_queue, Server.notify_period)
+
+    try:
+        # raise ServerException()
+        server.start(address)
+
+    except ServerException:
+        timestamp = datetime.datetime.now()
+        stack_trace = traceback.format_exc().replace("\n", "\n\t")
+        server.write_to_log(
+            f"{timestamp.isoformat().ljust(48)} Server Stopped\tException Occurred\n\t{stack_trace}",
+            True
+        )
+
+    except KeyboardInterrupt:
+        timestamp = datetime.datetime.now()
+        server.write_to_log(f"{timestamp.isoformat().ljust(48)} Server Stopped\t^C Keyboard Interrupt\n", True)
+
+    finally:
+        del server
 
 
 if __name__ == '__main__':
     try:
         main()
-
-    except KeyboardInterrupt:
-        print("^C Keyboard Interrupt, server shutting down")
-    except ServerException as server_exception:
-        print(f"The program failed with a message: {server_exception}")
     except Exception as e:
-        print("The program failed unexpectedly with message:\n" + str(e))
+        raise e
+        # print("The program failed unexpectedly with message:\n" + str(e))
