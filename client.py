@@ -1,7 +1,9 @@
+#!/usr/bin/python3.8
 """
 This is the client for the Networking Anonymous Board program.  It communicates with the server over TCP following the
 protocol defined in README.md
 """
+from __future__ import annotations
 
 import datetime
 import math
@@ -50,17 +52,16 @@ def read_bytes(client_socket: socket.socket, number_of_bytes: int, buffer_size: 
 def main():
     """Main function"""
 
-    # get ip and port from arguments or input
-    if len(sys.argv) == 1:
-        print("IP Address and port not passed, example usage 'client.py localhost 3000'")
-        ip = input("Input IP >")
-        port = input("Input Port >")
-    elif len(sys.argv) == 2:
-        print("port not passed, example usage 'client.py localhost 3000'")
-        ip = sys.argv[1]
-        port = input("Input IP >")
-    else:
-        ip, port = sys.argv[1:]
+    if sys.version_info[0] < 3 or sys.version_info[1] < 6:
+        print("server.py is only compatible with Python 3.6 (or above)")
+        sys.exit(1)
+
+    if any(map(lambda arg: arg in sys.argv, ["help", "-h", "--help"])):
+        print("usage: client.py [ip] [port]\noptions:\n\t-v --verbose prints server logs to console")
+        sys.exit(0)
+
+    ip = sys.argv[1] if len(sys.argv) >= 2 else input("Input IP >")
+    port = sys.argv[2] if len(sys.argv) >= 3 else input("Input Port >")
 
     address = parse_ip_port(ip, port)
 
@@ -215,6 +216,8 @@ def make_request(address: (str, int), request_info: dict) -> dict:
         s.close()
         return json.loads(response)
 
+    except socket.timeout:
+        raise ClientException("The connection with the server timed out")
     except ConnectionRefusedError:
         raise ClientException("Failed to connect")
     except json.decoder.JSONDecodeError:

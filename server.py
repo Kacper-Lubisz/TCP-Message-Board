@@ -1,7 +1,9 @@
+#!/usr/bin/python3.8
 """
 This is the server for the Networking Anonymous Board program.  It starts a TCP server which follows the protocol
 defined in README.md
 """
+from __future__ import annotations
 
 import sys
 import socket
@@ -57,21 +59,29 @@ def parse_ip_port(ip: str, port: str) -> (str, int):
 def main() -> None:
     """Main function"""
 
-    # get ip and port from arguments or input
-    if len(sys.argv) == 1:
-        print("IP Address and port not passed, example usage 'client.py localhost 3000'")
-        ip = input("Input IP >")
-        port = input("Input Port >")
-    elif len(sys.argv) == 2:
-        print("port not passed, example usage 'client.py localhost 3000'")
-        ip = sys.argv[1]
-        port = input("Input IP >")
-    else:
-        ip, port = sys.argv[1:]
+    if sys.version_info[0] < 3 or sys.version_info[1] < 6:
+        print("server.py is only compatible with Python 3.6 (or above)")
+        sys.exit(1)
+
+    if any(map(lambda arg: arg in sys.argv, ["help", "-h", "--help"])):
+        print("usage: server.py [ip] [port]\noptions:\n\t-v --verbose prints server logs to console")
+        sys.exit(0)
+
+    verbose = False
+    if "-v" in sys.argv:
+        verbose = True
+        sys.argv.remove("-v")
+
+    if "--verbose" in sys.argv:
+        verbose = True
+        sys.argv.remove("--verbose")
+
+    ip = sys.argv[1] if len(sys.argv) >= 2 else input("Input IP >")
+    port = sys.argv[2] if len(sys.argv) >= 3 else input("Input Port >")
 
     address = parse_ip_port(ip, port)
 
-    server = Server()
+    server = Server(verbose)
     server.start(address)
 
 
@@ -90,16 +100,18 @@ class Server:
 
     def __init__(
             self,
+            verbose: bool = False,
             buffer_size: int = 1024,
             boards_dir: str = "./boards",
-            log_file: str = "server.log"
+            log_file: str = "./server.log"
     ):
+
+        self.verbose = verbose
 
         self.buffer_size = buffer_size
         self.boards_dir = boards_dir
 
         self.boards = []
-        self.load_boards()
 
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.selector = selectors.DefaultSelector()
@@ -114,6 +126,8 @@ class Server:
         :param address: The address the server should listen on
         """
 
+        self.load_boards()
+
         ip, port = address
 
         try:
@@ -124,60 +138,24 @@ class Server:
         self.server_socket.setblocking(False)
         self.server_socket.listen(connection_queue)
 
-        print(f"Listening at {ip} on port {port}")
-        self.write_to_log(f"Starting Server \t{datetime.datetime.now().isoformat()} {ip}:{port}", False)
+        self.write_to_log(f"Starting Server \t{datetime.datetime.now().isoformat()} {ip}:{port}\n", self.verbose)
 
-        self.selector.register(self.server_socket, selectors.EVENT_READ, (self.accept_connection, {}))
-
-        # while True:
-        #
-        #     client_socket, address = self.server_socket.accept()
-        #
-        #     request_time = datetime.datetime.now()
-        #
-        #     try:
-        #         request_size = int.from_bytes(self.read_bytes(client_socket, 4), "big")
-        #         request_body = self.read_bytes(client_socket, request_size)
-        #
-        #         request_body = json.loads(request_body.decode())  # throws a json.JSONDecodeError
-        #         method, status, response = self.process_request(request_time, request_body)
-        #
-        #         request_method = request_body["method"]
-        #
-        #     except (socket.timeout, json.JSONDecodeError):
-        #         request_method, status, response = "?", "ERROR", None
-        #
-        #     self.write_to_log(
-        #         f"{address[0]}:{address[1]}\t{request_time.isoformat()}\t{request_method}\t{status}\n",
-        #         True
-        #     )
-        #
-        #     if response is not None:
-        #         response = json.dumps(response).encode()
-        #
-        #         client_socket.send(len(response).to_bytes(4, "big"))
-        #         client_socket.send(response)
-        #
-        #     client_socket.close()
+        self.selector.register(self.server_socket, selectors.EVENT_READ, (self.accept_connection, []))
 
         while True:
             for key, mask in self.selector.select(timeout=.25):
-                print(key, mask)
+                callback, data = key.data
+                callback(*data)
 
-    def accept_connection(self, client_socket, mask):
-
-        class ClientConnection():
-            pass
+    def accept_connection(self):
 
         client_socket, address = self.server_socket.accept()
-        request_time = datetime.datetime.now()
-
-        self.selector.register(client_socket, selectors.EVENT_READ, (self.read, ClientConnection()))
-
-        pass
-
-    def read(self, client_socket, mask):
-        pass
+        client = ClientConnection(self, client_socket, address)
+        self.selector.register(
+            client_socket,
+            selectors.EVENT_READ,
+            (client.read_bytes, [])
+        )
 
     @staticmethod
     def read_bytes(client_socket: socket.socket, number_of_bytes: int, buffer_size: int = 1024, timeout: float = 5):
@@ -222,15 +200,15 @@ class Server:
                 "boards": "Invalid Request, no method specified"
             }
 
-        method = request_body["method"]
-        if method == "GET_BOARDS":  # handles GET_BOARDS requests
+        method = request_body["method"]  # see README.md
+        if method == "GET_BOARDS":
 
             return method, "OK", {
                 "success": True,
                 "boards": self.boards
             }
 
-        elif method == "GET_MESSAGES":  # handles GET_MESSAGES requests
+        elif method == "GET_MESSAGES":
 
             if "board" not in request_body:
                 return method, "ERROR", {
@@ -253,7 +231,7 @@ class Server:
                 "messages": messages
             }
 
-        elif method == "POST_MESSAGE":  # handles POST_MESSAGE requests
+        elif method == "POST_MESSAGE":
 
             missing_arguments = []
             if "board" not in request_body:
@@ -322,12 +300,13 @@ class Server:
 
         return messages
 
-    def write_message_to_file(self,
-                              board_dir: str,
-                              request_time: datetime,
-                              message_title: str,
-                              message_content: str
-                              ) -> None:
+    def write_message_to_file(
+            self,
+            board_dir: str,
+            request_time: datetime,
+            message_title: str,
+            message_content: str
+    ) -> None:
         """
         This method stores an instance of a message in the file system.  The message is placed in the boards directory
         inside the corresponding board
@@ -341,7 +320,7 @@ class Server:
         :return:
         """
         if not os.path.isdir(self.boards_dir + "/" + board_dir):
-            raise ServerException("Board doesn't exist")
+            raise ServerException(f"Board {board_dir} doesn't exist")
 
         file_name = request_time.strftime("%Y%m%d-%H%M%S") + "-" + message_title + ""
 
@@ -351,31 +330,49 @@ class Server:
     def load_boards(self) -> None:
         """
         This method loads the names of all boards in the define board directory
+        :raises ServerException: if the server fails to load boards
         """
 
         if not os.path.isdir(self.boards_dir):
-            raise Exception(f"{self.boards_dir} doesn't exist")
+            raise ServerException(f"{self.boards_dir} doesn't exist")
 
         for board_dir in os.listdir(self.boards_dir):
             name = board_dir.replace("_", " ")
             self.boards.append(name)
 
         if len(self.boards) == 0:
-            raise Exception("No message boards defined")
+            raise ServerException(f"No message boards defined in {self.boards_dir}")
 
-    def write_to_log(self, message, print_to_console: bool) -> None:
+    def write_to_log(self, message, stdout: bool) -> None:
         """
         This method writes a message to the log file, and optionally to the console too
         :param message: The message to be written
-        :param print_to_console: If the message is to also be written to the console
+        :param stdout: If the message is to also be written to the console
         :raises OSError: if the log file can't be accessed
         """
 
         with open(self.log_file, "a") as file:
             file.write(message)
 
-        if print_to_console:
+        if stdout:
             print(message, end="")
+
+
+class ClientConnection():
+    def __init__(self, server: Server, socket, address):
+        super().__init__()
+
+        self.time = datetime.datetime.now()
+
+        self.server = server
+        self.address = address
+        self.socket = socket
+
+        self.requestSize = None
+        self.bytesRead = bytes()
+
+    def read_bytes(self):
+        pass
 
 
 if __name__ == '__main__':
