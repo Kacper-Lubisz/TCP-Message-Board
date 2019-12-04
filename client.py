@@ -127,23 +127,13 @@ def main():
             message_title = input("Message title >")
             message_content = input("Message content >")
 
-            # response = make_request(address, {
-            #     "method": "POST_MESSAGE",
-            #     "version": "1.0.0",
-            #     "board": boards[board_selected - 1],
-            #     "title": message_title,
-            #     "content": message_content
-            # })
-
-            for i in range(1001):
-                make_request(address, {
-                    "method": "POST_MESSAGE",
-                    "version": "1.0.0",
-                    "board": boards[board_selected - 1],
-                    "title": f"message {i + 1}",
-                    "content": message_content
-                })
-
+            response = make_request(address, {
+                "method": "POST_MESSAGE",
+                "version": "1.0.0",
+                "board": boards[board_selected - 1],
+                "title": message_title,
+                "content": message_content
+            })
 
             if response["success"]:
                 print("Message posted successfully\n")
