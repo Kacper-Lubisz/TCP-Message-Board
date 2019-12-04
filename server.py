@@ -348,6 +348,8 @@ class Server:
         if not os.path.isdir(self.boards_dir + "/" + board_dir):
             raise ServerException(f"Board {board_dir} doesn't exist")
 
+        message_title = message_title.replace("_", " ")
+
         file_name = request_time.strftime("%Y%m%d-%H%M%S") + "-" + message_title + ""
 
         with open(self.boards_dir + "/" + board_dir + "/" + file_name, "w") as file:
